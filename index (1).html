@@ -1,0 +1,1326 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Stock Ledger</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#1E2430;
+    --paper:#F5F3ED;
+    --paper-raised:#FFFFFF;
+    --steel:#445168;
+    --steel-dark:#2B3444;
+    --amber:#E2A63B;
+    --amber-soft:#FBEBCB;
+    --moss:#4C7A5B;
+    --moss-soft:#E4EDE6;
+    --rust:#C1502E;
+    --rust-soft:#F5DED4;
+    --line:#DAD5C8;
+    --muted:#7B8394;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--paper);
+    color:var(--ink);
+    font-family:'Inter', system-ui, sans-serif;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{
+    max-width:1180px;
+    margin:0 auto;
+    padding:28px 20px 80px;
+  }
+
+  /* ---- Masthead ---- */
+  .masthead{
+    background:var(--steel-dark);
+    color:#F5F3ED;
+    border-radius:14px;
+    padding:22px 24px 20px;
+    margin-bottom:22px;
+    box-shadow:0 1px 0 rgba(0,0,0,0.15);
+  }
+  .masthead-top{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .brand{display:flex; align-items:center; gap:12px;}
+  .brand svg{flex:none; width:34px; height:34px; color:var(--amber);}
+  .brand h1{
+    font-family:'Oswald', sans-serif;
+    font-weight:600;
+    font-size:26px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    margin:0;
+  }
+  .brand .tagline{
+    margin:2px 0 0;
+    font-size:13px;
+    color:#B9C0CE;
+  }
+  .ghost-btn{
+    background:transparent;
+    border:1px solid #5A6478;
+    color:#D7DBE4;
+    font-family:'Inter', sans-serif;
+    font-size:12.5px;
+    padding:8px 14px;
+    border-radius:8px;
+    cursor:pointer;
+    transition:background .15s, border-color .15s;
+    white-space:nowrap;
+  }
+  .ghost-btn:hover{ background:rgba(255,255,255,0.06); border-color:#7A869C; }
+
+  .masthead-stats{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+    margin-top:20px;
+  }
+  .chip{
+    background:rgba(255,255,255,0.06);
+    border:1px solid rgba(255,255,255,0.09);
+    border-radius:10px;
+    padding:8px 14px;
+    min-width:88px;
+    border-top:2px solid var(--amber);
+  }
+  .chip-in{ border-top-color:var(--moss); }
+  .chip-out{ border-top-color:var(--rust); }
+  .chip-net{ border-top-color:var(--amber); }
+  .chip-label{
+    display:block;
+    font-size:10.5px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:#A9B0C0;
+    margin-bottom:3px;
+  }
+  .chip-value{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:19px;
+    font-weight:600;
+  }
+  .chip-control{ display:flex; flex-direction:column; justify-content:center; }
+  .chip-control input{
+    width:56px;
+    background:transparent;
+    border:none;
+    border-bottom:1px solid #5A6478;
+    color:#F5F3ED;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:15px;
+    padding:2px 0;
+  }
+  .chip-control input:focus{ outline:none; border-color:var(--amber); }
+
+  .masthead-search{ margin-top:16px; }
+  .masthead-search input{
+    width:100%;
+    background:rgba(255,255,255,0.07);
+    border:1px solid rgba(255,255,255,0.12);
+    color:#F5F3ED;
+    border-radius:8px;
+    padding:10px 14px;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+  }
+  .masthead-search input::placeholder{ color:#8F97A8; }
+  .masthead-search input:focus{ outline:none; border-color:var(--amber); }
+
+  /* ---- Tabs ---- */
+  .tabs{
+    display:flex;
+    gap:4px;
+    margin-bottom:16px;
+    border-bottom:2px solid var(--line);
+    overflow-x:auto;
+  }
+  .tab-btn{
+    background:transparent;
+    border:none;
+    cursor:pointer;
+    font-family:'Oswald', sans-serif;
+    font-size:13px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    color:var(--muted);
+    padding:10px 16px;
+    border-bottom:2px solid transparent;
+    margin-bottom:-2px;
+    white-space:nowrap;
+  }
+  .tab-btn:hover{ color:var(--ink); }
+  .tab-btn.active{ color:var(--steel-dark); border-bottom-color:var(--amber); }
+  .tab-panel[hidden]{ display:none; }
+
+  /* ---- Table ---- */
+  .table-wrap{
+    background:var(--paper-raised);
+    border-radius:12px;
+    overflow-x:auto;
+    border:1px solid var(--line);
+  }
+  table.ledger{
+    width:100%;
+    border-collapse:collapse;
+    min-width:940px;
+  }
+  .ledger thead th{
+    background:var(--steel);
+    color:#fff;
+    font-family:'Oswald', sans-serif;
+    font-weight:500;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    font-size:12.5px;
+    text-align:left;
+    padding:13px 14px;
+    position:sticky;
+    top:0;
+  }
+  .ledger thead th:first-child{ border-top-left-radius:12px; }
+  .ledger thead th:last-child{ border-top-right-radius:12px; }
+
+  .row{
+    border-bottom:1px solid var(--line);
+    border-left:3px solid var(--amber);
+    transition:background .15s;
+  }
+  .row:nth-child(even){ background:#FAF9F5; }
+  .row.low-stock{ background:var(--rust-soft); border-left-color:var(--rust); }
+  .row td{ padding:10px 14px; vertical-align:middle; }
+
+  .cell-photo{ width:56px; }
+  .photo-wrap{ position:relative; width:44px; height:44px; }
+  .photo-thumb{
+    display:flex; align-items:center; justify-content:center;
+    width:44px; height:44px;
+    border-radius:8px;
+    border:1.5px dashed var(--line);
+    background:#fff;
+    overflow:hidden;
+    cursor:pointer;
+    color:var(--muted);
+  }
+  .photo-thumb:hover{ border-color:var(--amber); color:var(--steel); }
+  .photo-thumb img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .cam-icon{ width:18px; height:18px; flex:none; }
+  .photo-remove{
+    position:absolute; top:-6px; right:-6px;
+    width:18px; height:18px;
+    border-radius:50%;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--rust);
+    font-size:12px; line-height:1;
+    cursor:pointer;
+    padding:0;
+  }
+  .photo-remove:hover{ background:var(--rust-soft); }
+
+  .cell-item{ position:relative; min-width:180px; }
+  .cell-item::before{
+    content:"";
+    position:absolute;
+    left:-9px; top:50%;
+    width:6px; height:6px;
+    margin-top:-3px;
+    border-radius:50%;
+    background:var(--paper);
+    border:1px solid var(--line);
+  }
+
+  input.in-name, input.in-design{
+    width:100%;
+    border:none;
+    background:transparent;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    padding:6px 4px;
+    border-radius:5px;
+  }
+  input.in-name{ font-weight:500; }
+  input.in-name:focus, input.in-design:focus{
+    outline:none;
+    background:var(--amber-soft);
+  }
+  input.in-design{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:12.5px;
+    border:1px dashed var(--line);
+    padding:6px 8px;
+  }
+
+  .cell-qty{ min-width:128px; }
+  .cell-price{ min-width:96px; }
+  .qty-group{ display:flex; align-items:center; gap:6px; }
+  .stepper{
+    width:24px; height:24px;
+    border-radius:6px;
+    border:1px solid var(--line);
+    background:#fff;
+    color:var(--muted);
+    cursor:pointer;
+    font-size:14px;
+    line-height:1;
+    flex:none;
+  }
+  .stepper:hover{ background:var(--paper); color:var(--ink); }
+  input.num{
+    width:64px;
+    text-align:center;
+    border:1px solid var(--line);
+    border-radius:6px;
+    padding:5px 2px;
+    font-family:'IBM Plex Mono', monospace;
+    font-size:13.5px;
+    -moz-appearance:textfield;
+  }
+  input.num::-webkit-outer-spin-button, input.num::-webkit-inner-spin-button{ -webkit-appearance:none; margin:0; }
+  input.num:focus{ outline:none; border-color:var(--steel); }
+  .in-in{ color:var(--moss); border-color:var(--moss-soft); }
+  .in-out{ color:var(--rust); border-color:var(--rust-soft); }
+  .in-price{ color:var(--steel-dark); }
+
+  .cell-remain{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14.5px; white-space:nowrap; }
+  .cell-value{ font-family:'IBM Plex Mono', monospace; font-weight:600; font-size:14.5px; white-space:nowrap; color:var(--steel-dark); min-width:96px; }
+
+  .stock-total-banner{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    background:var(--steel-dark);
+    color:#F5F3ED;
+    border-radius:10px;
+    padding:14px 20px;
+    margin-top:14px;
+    border-top:3px solid var(--amber);
+  }
+  .stock-total-label{
+    font-family:'Oswald', sans-serif;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    font-size:13px;
+    color:#B9C0CE;
+  }
+  .stock-total-figure{
+    font-family:'IBM Plex Mono', monospace;
+    font-size:24px;
+    font-weight:600;
+    color:var(--amber);
+  }
+  .low-badge{
+    display:inline-block;
+    margin-left:8px;
+    font-family:'Oswald', sans-serif;
+    font-size:10px;
+    letter-spacing:0.05em;
+    background:var(--rust);
+    color:#fff;
+    padding:2px 6px;
+    border-radius:4px;
+    vertical-align:middle;
+  }
+
+  .cell-actions{ text-align:center; }
+  .del-btn{
+    width:26px; height:26px;
+    border-radius:6px;
+    border:1px solid transparent;
+    background:transparent;
+    color:var(--muted);
+    font-size:16px;
+    cursor:pointer;
+    line-height:1;
+  }
+  .del-btn:hover{ background:var(--rust-soft); color:var(--rust); border-color:var(--rust-soft); }
+
+  .add-row{
+    display:block;
+    width:100%;
+    margin-top:12px;
+    padding:13px;
+    background:transparent;
+    border:1.5px dashed var(--line);
+    border-radius:10px;
+    color:var(--steel);
+    font-family:'Oswald', sans-serif;
+    font-size:13px;
+    letter-spacing:0.04em;
+    text-transform:uppercase;
+    cursor:pointer;
+    transition:border-color .15s, color .15s, background .15s;
+  }
+  .add-row:hover{ border-color:var(--amber); color:var(--ink); background:var(--amber-soft); }
+
+  .empty-state, .loading-state, .error-banner{
+    text-align:center;
+    color:var(--muted);
+    font-size:14px;
+    padding:22px 10px 4px;
+  }
+  .error-banner{ color:var(--rust); }
+
+  /* ---- Panels (Invoice form) ---- */
+  .panel{
+    background:var(--paper-raised);
+    border:1px solid var(--line);
+    border-radius:12px;
+    padding:20px;
+  }
+  .panel-title{
+    font-family:'Oswald', sans-serif;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    font-size:16px;
+    margin:0 0 4px;
+    color:var(--steel-dark);
+  }
+  .panel-hint{ margin:0 0 18px; font-size:12.5px; color:var(--muted); }
+  .form-row{ margin-bottom:16px; }
+  .form-field label{
+    display:block;
+    font-size:12px;
+    text-transform:uppercase;
+    letter-spacing:0.04em;
+    color:var(--muted);
+    margin-bottom:6px;
+  }
+  .inline-row{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; }
+  .inline-row select, .inline-row input[type=text], .inline-row input[type=number]{
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:9px 10px;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+    background:#fff;
+  }
+  .inline-row select{ flex:1; min-width:180px; }
+  .inline-panel{ display:flex; gap:8px; margin-top:10px; flex-wrap:wrap; }
+  .inline-panel input{
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:9px 10px;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+    flex:1;
+    min-width:140px;
+  }
+  .settings-row{ display:flex; gap:16px; flex-wrap:wrap; margin-bottom:20px; padding-bottom:16px; border-bottom:1px dashed var(--line); }
+  .settings-row .form-field{ flex:1; min-width:160px; }
+  .settings-row input{
+    width:100%;
+    border:1px solid var(--line);
+    border-radius:7px;
+    padding:9px 10px;
+    font-family:'Inter', sans-serif;
+    font-size:14px;
+  }
+
+  .btn-primary{
+    background:var(--amber);
+    color:var(--steel-dark);
+    border:none;
+    border-radius:8px;
+    font-family:'Oswald', sans-serif;
+    text-transform:uppercase;
+    letter-spacing:0.03em;
+    font-size:13px;
+    padding:10px 18px;
+    cursor:pointer;
+    font-weight:600;
+  }
+  .btn-primary:hover{ filter:brightness(0.95); }
+  .btn-block{ display:block; width:100%; margin-top:18px; padding:13px; font-size:14px; }
+  .btn-light-ghost{
+    background:#fff;
+    color:var(--steel);
+    border:1px solid var(--line);
+    border-radius:7px;
+    font-family:'Inter', sans-serif;
+    font-size:13px;
+    padding:8px 14px;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .btn-light-ghost:hover{ border-color:var(--steel); }
+  .btn-sm{ padding:6px 10px; font-size:12px; margin-right:6px; }
+
+  .totals-block{ max-width:320px; margin-left:auto; margin-top:10px; }
+  .totals-row{
+    display:flex; align-items:center; justify-content:space-between;
+    padding:6px 0; font-family:'IBM Plex Mono', monospace; font-size:14px;
+  }
+  .totals-row input{
+    width:100px; text-align:right;
+    border:1px solid var(--line); border-radius:6px; padding:5px 8px;
+    font-family:'IBM Plex Mono', monospace;
+  }
+  .total-final{ border-top:1px solid var(--line); margin-top:4px; padding-top:10px; font-weight:700; font-size:16px; }
+
+  /* ---- Print modal ---- */
+  .print-modal{
+    position:fixed; inset:0; background:rgba(30,36,48,0.55);
+    display:flex; align-items:flex-start; justify-content:center;
+    padding:30px 16px; overflow-y:auto; z-index:50;
+  }
+  .print-sheet{ background:#fff; border-radius:10px; padding:28px; max-width:520px; width:100%; }
+  .pr-header h2{ font-family:'Oswald', sans-serif; text-transform:uppercase; margin:0 0 2px; font-size:22px; }
+  .pr-sub{ margin:0 0 16px; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
+  .pr-meta{ display:flex; flex-direction:column; gap:2px; font-size:13px; margin-bottom:16px; color:var(--ink); }
+  .pr-table{ width:100%; border-collapse:collapse; margin-bottom:14px; }
+  .pr-table th{ text-align:left; font-family:'Oswald', sans-serif; font-size:11px; text-transform:uppercase; border-bottom:2px solid var(--ink); padding:6px 4px; }
+  .pr-table td{ padding:7px 4px; border-bottom:1px solid var(--line); font-size:13.5px; }
+  .pr-design{ color:var(--muted); font-size:11px; }
+  .pr-totals{ margin-left:auto; max-width:220px; font-family:'IBM Plex Mono', monospace; font-size:13.5px; }
+  .pr-totals > div{ display:flex; justify-content:space-between; padding:3px 0; }
+  .pr-grand{ font-weight:700; font-size:16px; border-top:1px solid var(--ink); margin-top:4px; padding-top:8px !important; }
+  .pr-thanks{ text-align:center; margin-top:18px; color:var(--muted); font-size:12px; }
+  .print-actions{ display:flex; gap:10px; margin-top:20px; }
+
+  @media print{
+    body *{ visibility:hidden; }
+    #printArea, #printArea *{ visibility:visible; }
+    #printArea{ position:absolute; top:0; left:0; width:100%; padding:0; }
+    .no-print{ display:none !important; }
+    .print-modal{ position:static; background:none; padding:0; }
+    .print-sheet{ box-shadow:none; max-width:100%; padding:0; }
+  }
+
+  @media (max-width:560px){
+    .masthead-top{ flex-direction:column; }
+    .brand h1{ font-size:22px; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+
+  <header class="masthead">
+    <div class="masthead-top">
+      <div class="brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M20.59 13.41 11 3.83A2 2 0 0 0 9.59 3.24L4 3a1 1 0 0 0-1 1l.24 5.59a2 2 0 0 0 .59 1.41l9.58 9.59a2 2 0 0 0 2.83 0l4.35-4.35a2 2 0 0 0 0-2.83Z"/><circle cx="7.5" cy="7.5" r="1.4" fill="currentColor" stroke="none"/></svg>
+        <div>
+          <h1>Stock Ledger</h1>
+          <p class="tagline">Track what comes in, what goes out, what's left.</p>
+        </div>
+      </div>
+      <button id="resetBtn" class="ghost-btn">Clear all data</button>
+    </div>
+
+    <div class="masthead-stats">
+      <div class="chip"><span class="chip-label">Items</span><span class="chip-value" id="statItems">0</span></div>
+      <div class="chip chip-in"><span class="chip-label">Total In</span><span class="chip-value" id="statIn">0</span></div>
+      <div class="chip chip-out"><span class="chip-label">Total Out</span><span class="chip-value" id="statOut">0</span></div>
+      <div class="chip chip-net"><span class="chip-label">Net Stock</span><span class="chip-value" id="statNet">0</span></div>
+      <div class="chip chip-net"><span class="chip-label">Stock Value</span><span class="chip-value" id="statValue">0</span></div>
+      <div class="chip chip-control">
+        <label class="chip-label" for="thresholdInput">Low stock ≤</label>
+        <input type="number" id="thresholdInput" value="5" min="0">
+      </div>
+    </div>
+
+    <div class="masthead-search">
+      <input type="text" id="searchInput" placeholder="Search by item or design no...">
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab-btn active" data-tab="stock">Stock</button>
+    <button class="tab-btn" data-tab="invoice">New Invoice</button>
+    <button class="tab-btn" data-tab="invoices">Invoices</button>
+    <button class="tab-btn" data-tab="customers">Customers</button>
+  </nav>
+
+  <main>
+
+    <section id="panel-stock" class="tab-panel">
+      <div class="table-wrap">
+        <table class="ledger">
+          <thead>
+            <tr>
+              <th>Photo</th>
+              <th>Item</th>
+              <th>In Qty</th>
+              <th>Out Qty</th>
+              <th>Remain Qty</th>
+              <th>Unit Price</th>
+              <th>Total Value</th>
+              <th>Design No.</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody id="tbody"></tbody>
+        </table>
+      </div>
+
+      <div class="stock-total-banner">
+        <span class="stock-total-label">Overall Stock Value</span>
+        <span class="stock-total-figure" id="stockOverallValue">0</span>
+      </div>
+
+      <button id="addItemBtn" class="add-row">+ Add item</button>
+      <p id="emptyState" class="empty-state" hidden>No items yet — add your first one above to start tracking stock.</p>
+      <p id="loadingState" class="loading-state">Loading your stock ledger…</p>
+      <p id="errorBanner" class="error-banner" hidden>Couldn't load saved data — changes this session may not be saved.</p>
+    </section>
+
+    <section id="panel-invoice" class="tab-panel" hidden>
+      <div class="panel">
+        <h2 class="panel-title">New Invoice</h2>
+        <p class="panel-hint">Pick a customer, add items from your stock, and print a receipt.</p>
+
+        <div class="settings-row">
+          <div class="form-field">
+            <label for="shopNameInput">Shop name (shown on receipt)</label>
+            <input type="text" id="shopNameInput" placeholder="Your shop name">
+          </div>
+          <div class="form-field">
+            <label for="currencyInput">Currency symbol</label>
+            <input type="text" id="currencyInput" placeholder="e.g. AED, $, ₹" maxlength="6">
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label>Customer</label>
+            <div class="inline-row">
+              <select id="invCustomerSelect"><option value="">— Select customer —</option></select>
+              <button type="button" id="newCustomerBtn" class="btn-light-ghost">+ New customer</button>
+            </div>
+            <div id="newCustomerPanel" class="inline-panel" hidden>
+              <input type="text" id="newCustomerName" placeholder="Customer name">
+              <input type="text" id="newCustomerPhone" placeholder="Phone (optional)">
+              <button type="button" id="saveNewCustomerBtn" class="btn-primary">Add customer</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="form-row">
+          <div class="form-field">
+            <label>Add items</label>
+            <div class="inline-row">
+              <select id="invItemSelect"><option value="">— Select item —</option></select>
+              <input type="number" id="invQtyInput" min="1" value="1" style="width:80px;">
+              <button type="button" id="addLineBtn" class="btn-light-ghost">+ Add</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap" style="margin-top:6px;">
+          <table class="ledger" style="min-width:0;">
+            <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Line total</th><th></th></tr></thead>
+            <tbody id="invLinesBody"></tbody>
+          </table>
+        </div>
+        <p id="invEmptyLines" class="empty-state">No items added yet — pick something above.</p>
+
+        <div class="totals-block">
+          <div class="totals-row"><span>Subtotal</span><span id="invSubtotal">0</span></div>
+          <div class="totals-row"><span>Discount</span><input type="number" id="invDiscount" min="0" value="0"></div>
+          <div class="totals-row total-final"><span>Total</span><span id="invTotal">0</span></div>
+          <div class="totals-row"><span>Paid now</span><input type="number" id="invPaidNow" min="0" value="0"></div>
+          <div class="totals-row"><span>Balance due</span><span id="invBalanceDue">0</span></div>
+        </div>
+
+        <button type="button" id="saveInvoiceBtn" class="btn-primary btn-block">Save & Print Invoice</button>
+      </div>
+    </section>
+
+    <section id="panel-invoices" class="tab-panel" hidden>
+      <div class="table-wrap">
+        <table class="ledger" style="min-width:0;">
+          <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th>Total</th><th>Paid</th><th>Balance</th><th></th></tr></thead>
+          <tbody id="invoicesBody"></tbody>
+        </table>
+      </div>
+      <p id="invoicesEmpty" class="empty-state" hidden>No invoices yet — create one from the New Invoice tab.</p>
+    </section>
+
+    <section id="panel-customers" class="tab-panel" hidden>
+      <div class="form-row">
+        <button type="button" id="addCustomerBtn" class="btn-light-ghost">+ Add customer</button>
+      </div>
+      <div class="table-wrap">
+        <table class="ledger" style="min-width:0;">
+          <thead><tr><th>Customer</th><th>Phone</th><th>Billed</th><th>Paid</th><th>Balance</th><th></th></tr></thead>
+          <tbody id="customersBody"></tbody>
+        </table>
+      </div>
+      <p id="customersEmpty" class="empty-state" hidden>No customers yet.</p>
+    </section>
+
+  </main>
+
+</div>
+
+<div id="printModal" class="print-modal" hidden>
+  <div class="print-sheet">
+    <div id="printArea"></div>
+    <div class="print-actions no-print">
+      <button type="button" id="printBtn" class="btn-primary">Print</button>
+      <button type="button" id="closePrintBtn" class="btn-light-ghost">Close</button>
+    </div>
+  </div>
+</div>
+
+<script>
+  const ITEMS_KEY = 'inventory-items';
+  const CUSTOMERS_KEY = 'inventory-customers';
+  const INVOICES_KEY = 'inventory-invoices';
+  const SETTINGS_KEY = 'inventory-settings';
+
+  let items = [];
+  let customers = [];
+  let invoices = [];
+  let settings = { shopName:'', currency:'$' };
+  let currentInvoiceLines = [];
+
+  let filterText = '';
+  let lowStockThreshold = 5;
+  let storageAvailable = true;
+  const saveTimers = {};
+
+  const tbody = document.getElementById('tbody');
+  const emptyState = document.getElementById('emptyState');
+  const loadingState = document.getElementById('loadingState');
+  const errorBanner = document.getElementById('errorBanner');
+
+  // Use Claude's storage API when this page is running inside Claude.ai's
+  // artifact preview; fall back to the browser's own localStorage when it's
+  // opened as a plain hosted or downloaded file.
+  const hasCloudStorage = typeof window.storage !== 'undefined' && window.storage !== null;
+
+  async function storageGet(key){
+    if(hasCloudStorage) return window.storage.get(key, false);
+    const raw = localStorage.getItem(key);
+    return raw !== null ? { key, value: raw, shared: false } : null;
+  }
+  async function storageSet(key, value){
+    if(hasCloudStorage) return window.storage.set(key, value, false);
+    localStorage.setItem(key, value);
+    return { key, value, shared: false };
+  }
+
+  function scheduleSave(key, getData){
+    clearTimeout(saveTimers[key]);
+    saveTimers[key] = setTimeout(async () => {
+      try{
+        const result = await storageSet(key, JSON.stringify(getData()));
+        if(!result){ storageAvailable = false; errorBanner.hidden = false; }
+        else { storageAvailable = true; errorBanner.hidden = true; }
+      }catch(e){
+        storageAvailable = false;
+        errorBanner.hidden = false;
+      }
+    }, 500);
+  }
+  function debounceSave(){ scheduleSave(ITEMS_KEY, () => items); }
+
+  function uid(){ return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function escapeHtml(str){
+    return (str || '').toString().replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function money(n){
+    const cur = escapeHtml(settings.currency || '');
+    return `${cur}${(Number(n)||0).toFixed(2)}`;
+  }
+
+  async function init(){
+    try{
+      const [itemsRes, custRes, invRes, setRes] = await Promise.all([
+        storageGet(ITEMS_KEY), storageGet(CUSTOMERS_KEY), storageGet(INVOICES_KEY), storageGet(SETTINGS_KEY)
+      ]);
+      items = itemsRes && itemsRes.value ? JSON.parse(itemsRes.value) : [];
+      customers = custRes && custRes.value ? JSON.parse(custRes.value) : [];
+      invoices = invRes && invRes.value ? JSON.parse(invRes.value) : [];
+      settings = setRes && setRes.value ? JSON.parse(setRes.value) : { shopName:'', currency:'$' };
+    }catch(e){
+      items = []; customers = []; invoices = []; settings = { shopName:'', currency:'$' };
+      storageAvailable = false; errorBanner.hidden = false;
+    }
+    document.getElementById('shopNameInput').value = settings.shopName || '';
+    document.getElementById('currencyInput').value = settings.currency || '';
+    loadingState.hidden = true;
+    render();
+    renderInvoiceItemOptions();
+    renderCustomerOptions();
+    renderInvoicesTab();
+    renderCustomersTab();
+  }
+
+  /* ================= STOCK TAB ================= */
+
+  function addItem(){
+    items.unshift({ id: uid(), name:'', designNo:'', inQty:0, outQty:0, price:0, photo:null });
+    debounceSave();
+    render();
+    const firstInput = tbody.querySelector('tr:first-child .in-name');
+    if(firstInput) firstInput.focus();
+  }
+
+  function deleteItem(id){
+    if(!confirm('Remove this item from your stock ledger?')) return;
+    items = items.filter(i => i.id !== id);
+    debounceSave();
+    render();
+    renderInvoiceItemOptions();
+  }
+
+  function isLow(item){
+    const remain = (Number(item.inQty)||0) - (Number(item.outQty)||0);
+    return item.inQty > 0 && remain <= lowStockThreshold;
+  }
+
+  function photoCellHtml(item){
+    const inner = item.photo
+      ? `<img src="${item.photo}" alt="">`
+      : `<svg class="cam-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M4 7h3l1.5-2h7L17 7h3a1 1 0 0 1 1 1v10a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1Z"/><circle cx="12" cy="13" r="3.2"/></svg>`;
+    return `
+      <div class="photo-wrap">
+        <label class="photo-thumb" title="${item.photo ? 'Change photo' : 'Upload photo'}">
+          ${inner}
+          <input type="file" accept="image/*" class="photo-input" hidden>
+        </label>
+        <button class="photo-remove" title="Remove photo" ${item.photo ? '' : 'hidden'}>×</button>
+      </div>
+    `;
+  }
+  function updateRowPhoto(tr, item){
+    tr.querySelector('.cell-photo').innerHTML = photoCellHtml(item);
+  }
+  function handlePhotoFile(file, item, tr){
+    if(!file || !file.type.startsWith('image/')) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const img = new Image();
+      img.onload = () => {
+        const maxDim = 160;
+        let w = img.width, h = img.height;
+        if(w > h){ if(w > maxDim){ h = Math.round(h * maxDim / w); w = maxDim; } }
+        else{ if(h > maxDim){ w = Math.round(w * maxDim / h); h = maxDim; } }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        item.photo = canvas.toDataURL('image/jpeg', 0.72);
+        updateRowPhoto(tr, item);
+        debounceSave();
+      };
+      img.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+
+  function buildRow(item){
+    const remain = (Number(item.inQty)||0) - (Number(item.outQty)||0);
+    const tr = document.createElement('tr');
+    tr.className = 'row' + (isLow(item) ? ' low-stock' : '');
+    tr.dataset.id = item.id;
+    tr.innerHTML = `
+      <td class="cell-photo">${photoCellHtml(item)}</td>
+      <td class="cell-item"><input type="text" class="in-name" value="${escapeHtml(item.name)}" placeholder="Item name"></td>
+      <td class="cell-qty">
+        <div class="qty-group">
+          <button class="stepper" data-field="inQty" data-dir="-1">−</button>
+          <input type="number" class="num in-in" value="${item.inQty}" min="0">
+          <button class="stepper" data-field="inQty" data-dir="1">+</button>
+        </div>
+      </td>
+      <td class="cell-qty">
+        <div class="qty-group">
+          <button class="stepper" data-field="outQty" data-dir="-1">−</button>
+          <input type="number" class="num in-out" value="${item.outQty}" min="0">
+          <button class="stepper" data-field="outQty" data-dir="1">+</button>
+        </div>
+      </td>
+      <td class="cell-remain">
+        <span class="remain-value">${remain}</span>${isLow(item) ? '<span class="low-badge">LOW</span>' : ''}
+      </td>
+      <td class="cell-price"><input type="number" class="num in-price" value="${item.price||0}" min="0" step="0.01"></td>
+      <td class="cell-value">${money(remain * (Number(item.price)||0))}</td>
+      <td class="cell-design"><input type="text" class="in-design" value="${escapeHtml(item.designNo)}" placeholder="—"></td>
+      <td class="cell-actions"><button class="del-btn" title="Remove item">×</button></td>
+    `;
+    return tr;
+  }
+
+  function render(){
+    const q = filterText.trim().toLowerCase();
+    const filtered = items.filter(i => !q || i.name.toLowerCase().includes(q) || i.designNo.toLowerCase().includes(q));
+    tbody.innerHTML = '';
+    filtered.forEach(item => tbody.appendChild(buildRow(item)));
+    emptyState.hidden = items.length !== 0;
+    updateStats();
+  }
+
+  function updateRowRemain(tr, item){
+    const remain = (Number(item.inQty)||0) - (Number(item.outQty)||0);
+    tr.classList.toggle('low-stock', isLow(item));
+    const cell = tr.querySelector('.cell-remain');
+    cell.innerHTML = `<span class="remain-value">${remain}</span>${isLow(item) ? '<span class="low-badge">LOW</span>' : ''}`;
+    const valueCell = tr.querySelector('.cell-value');
+    if(valueCell) valueCell.textContent = money(remain * (Number(item.price)||0));
+  }
+
+  function updateStats(){
+    const totalItems = items.length;
+    const totalIn = items.reduce((s,i) => s + (Number(i.inQty)||0), 0);
+    const totalOut = items.reduce((s,i) => s + (Number(i.outQty)||0), 0);
+    const stockValue = items.reduce((s,i) => s + ((Number(i.inQty)||0)-(Number(i.outQty)||0)) * (Number(i.price)||0), 0);
+    document.getElementById('statItems').textContent = totalItems;
+    document.getElementById('statIn').textContent = totalIn;
+    document.getElementById('statOut').textContent = totalOut;
+    document.getElementById('statNet').textContent = totalIn - totalOut;
+    document.getElementById('statValue').textContent = money(stockValue);
+    document.getElementById('stockOverallValue').textContent = money(stockValue);
+  }
+
+  tbody.addEventListener('input', e => {
+    const tr = e.target.closest('tr'); if(!tr) return;
+    const item = items.find(i => i.id === tr.dataset.id); if(!item) return;
+    if(e.target.classList.contains('in-name')) item.name = e.target.value;
+    else if(e.target.classList.contains('in-design')) item.designNo = e.target.value;
+    else if(e.target.classList.contains('in-in')) item.inQty = Math.max(0, Number(e.target.value) || 0);
+    else if(e.target.classList.contains('in-out')) item.outQty = Math.max(0, Number(e.target.value) || 0);
+    else if(e.target.classList.contains('in-price')) item.price = Math.max(0, Number(e.target.value) || 0);
+    else return;
+    updateRowRemain(tr, item);
+    updateStats();
+    debounceSave();
+    renderInvoiceItemOptions();
+  });
+
+  tbody.addEventListener('click', e => {
+    const stepBtn = e.target.closest('.stepper');
+    if(stepBtn){
+      const tr = e.target.closest('tr');
+      const item = items.find(i => i.id === tr.dataset.id);
+      const field = stepBtn.dataset.field;
+      const dir = Number(stepBtn.dataset.dir);
+      item[field] = Math.max(0, (Number(item[field])||0) + dir);
+      const input = tr.querySelector(field === 'inQty' ? '.in-in' : '.in-out');
+      input.value = item[field];
+      updateRowRemain(tr, item);
+      updateStats();
+      debounceSave();
+      renderInvoiceItemOptions();
+      return;
+    }
+    const delBtn = e.target.closest('.del-btn');
+    if(delBtn){
+      const tr = e.target.closest('tr');
+      deleteItem(tr.dataset.id);
+      return;
+    }
+    const removeBtn = e.target.closest('.photo-remove');
+    if(removeBtn){
+      e.preventDefault();
+      const tr = e.target.closest('tr');
+      const item = items.find(i => i.id === tr.dataset.id);
+      item.photo = null;
+      updateRowPhoto(tr, item);
+      debounceSave();
+    }
+  });
+
+  tbody.addEventListener('change', e => {
+    if(!e.target.classList.contains('photo-input')) return;
+    const tr = e.target.closest('tr');
+    const item = items.find(i => i.id === tr.dataset.id);
+    const file = e.target.files && e.target.files[0];
+    handlePhotoFile(file, item, tr);
+    e.target.value = '';
+  });
+
+  document.getElementById('addItemBtn').addEventListener('click', addItem);
+  document.getElementById('searchInput').addEventListener('input', e => { filterText = e.target.value; render(); });
+  document.getElementById('thresholdInput').addEventListener('input', e => { lowStockThreshold = Math.max(0, Number(e.target.value) || 0); render(); });
+  document.getElementById('resetBtn').addEventListener('click', async () => {
+    if(!confirm('This clears every item, customer, and invoice. This cannot be undone. Continue?')) return;
+    items = []; customers = []; invoices = [];
+    render(); renderInvoiceItemOptions(); renderCustomerOptions(); renderInvoicesTab(); renderCustomersTab();
+    try{
+      await storageSet(ITEMS_KEY, JSON.stringify(items));
+      await storageSet(CUSTOMERS_KEY, JSON.stringify(customers));
+      await storageSet(INVOICES_KEY, JSON.stringify(invoices));
+    }catch(e){}
+  });
+
+  /* ================= SETTINGS ================= */
+
+  document.getElementById('shopNameInput').addEventListener('input', e => {
+    settings.shopName = e.target.value;
+    scheduleSave(SETTINGS_KEY, () => settings);
+  });
+  document.getElementById('currencyInput').addEventListener('input', e => {
+    settings.currency = e.target.value;
+    scheduleSave(SETTINGS_KEY, () => settings);
+    updateStats(); renderInvoiceItemOptions(); renderInvoicesTab(); renderCustomersTab(); renderInvoiceLines();
+  });
+
+  /* ================= CUSTOMERS ================= */
+
+  function addCustomer(name, phone){
+    const c = { id: uid(), name: (name||'').trim() || 'Unnamed customer', phone: (phone||'').trim(), payments: [] };
+    customers.push(c);
+    scheduleSave(CUSTOMERS_KEY, () => customers);
+    renderCustomerOptions();
+    renderCustomersTab();
+    return c;
+  }
+
+  function customerBalance(customer){
+    const billed = invoices.filter(inv => inv.customerId === customer.id).reduce((s,inv)=>s+inv.total,0);
+    const paid = (customer.payments||[]).reduce((s,p)=>s+p.amount,0);
+    return { billed, paid, balance: billed - paid };
+  }
+
+  function recordPayment(customerId){
+    const customer = customers.find(c=>c.id===customerId);
+    if(!customer) return;
+    const input = prompt(`Payment amount received from ${customer.name}:`);
+    if(input === null) return;
+    const amt = parseFloat(input);
+    if(!amt || amt <= 0){ alert('Enter a valid amount.'); return; }
+    customer.payments = customer.payments || [];
+    customer.payments.push({ id: uid(), amount: amt, date: new Date().toISOString(), note:'Manual payment' });
+    scheduleSave(CUSTOMERS_KEY, () => customers);
+    renderCustomersTab();
+    renderInvoicesTab();
+  }
+
+  function deleteCustomer(customerId){
+    const hasInvoices = invoices.some(inv=>inv.customerId===customerId);
+    if(hasInvoices){ alert("This customer has invoices on record and can't be deleted. You can still record payments against their balance."); return; }
+    if(!confirm('Remove this customer?')) return;
+    customers = customers.filter(c=>c.id!==customerId);
+    scheduleSave(CUSTOMERS_KEY, () => customers);
+    renderCustomerOptions();
+    renderCustomersTab();
+  }
+
+  function renderCustomersTab(){
+    const body = document.getElementById('customersBody');
+    body.innerHTML = '';
+    customers.forEach(c=>{
+      const {billed,paid,balance} = customerBalance(c);
+      const tr = document.createElement('tr');
+      tr.className = 'row' + (balance>0 ? ' low-stock':'');
+      tr.innerHTML = `
+        <td><strong>${escapeHtml(c.name)}</strong></td>
+        <td>${escapeHtml(c.phone||'—')}</td>
+        <td>${money(billed)}</td>
+        <td>${money(paid)}</td>
+        <td><strong>${money(balance)}</strong></td>
+        <td>
+          <button type="button" class="btn-light-ghost btn-sm" data-action="pay" data-id="${c.id}">Record payment</button>
+          <button type="button" class="del-btn" data-action="delcust" data-id="${c.id}" title="Remove customer">×</button>
+        </td>
+      `;
+      body.appendChild(tr);
+    });
+    document.getElementById('customersEmpty').hidden = customers.length !== 0;
+  }
+
+  function renderCustomerOptions(){
+    const sel = document.getElementById('invCustomerSelect');
+    const current = sel.value;
+    sel.innerHTML = '<option value="">— Select customer —</option>' +
+      customers.map(c=>`<option value="${c.id}">${escapeHtml(c.name)}</option>`).join('');
+    if(customers.some(c=>c.id===current)) sel.value = current;
+  }
+
+  document.getElementById('customersBody').addEventListener('click', e=>{
+    const payBtn = e.target.closest('[data-action="pay"]');
+    if(payBtn){ recordPayment(payBtn.dataset.id); return; }
+    const delBtn = e.target.closest('[data-action="delcust"]');
+    if(delBtn){ deleteCustomer(delBtn.dataset.id); }
+  });
+
+  document.getElementById('addCustomerBtn').addEventListener('click', ()=>{
+    const name = prompt('Customer name:');
+    if(!name) return;
+    const phone = prompt('Phone (optional):') || '';
+    addCustomer(name, phone);
+  });
+
+  document.getElementById('newCustomerBtn').addEventListener('click', ()=>{
+    const panel = document.getElementById('newCustomerPanel');
+    panel.hidden = !panel.hidden;
+  });
+
+  document.getElementById('saveNewCustomerBtn').addEventListener('click', ()=>{
+    const nameInput = document.getElementById('newCustomerName');
+    const phoneInput = document.getElementById('newCustomerPhone');
+    if(!nameInput.value.trim()){ alert('Enter a customer name.'); return; }
+    const c = addCustomer(nameInput.value, phoneInput.value);
+    document.getElementById('invCustomerSelect').value = c.id;
+    document.getElementById('newCustomerPanel').hidden = true;
+    nameInput.value=''; phoneInput.value='';
+  });
+
+  /* ================= NEW INVOICE ================= */
+
+  function renderInvoiceItemOptions(){
+    const sel = document.getElementById('invItemSelect');
+    sel.innerHTML = '<option value="">— Select item —</option>' +
+      items.map(i=>{
+        const remain = (Number(i.inQty)||0)-(Number(i.outQty)||0);
+        return `<option value="${i.id}">${escapeHtml(i.name || 'Unnamed item')} — remain ${remain} — ${money(i.price||0)}</option>`;
+      }).join('');
+  }
+
+  function addInvoiceLine(){
+    const sel = document.getElementById('invItemSelect');
+    const qtyInput = document.getElementById('invQtyInput');
+    const itemId = sel.value;
+    const qty = Math.max(1, Number(qtyInput.value)||1);
+    if(!itemId){ alert('Choose an item first.'); return; }
+    const item = items.find(i=>i.id===itemId);
+    if(!item) return;
+    const remain = (Number(item.inQty)||0)-(Number(item.outQty)||0);
+    if(qty > remain){
+      if(!confirm(`Only ${remain} in stock for "${item.name||'this item'}". Add anyway?`)) return;
+    }
+    const existing = currentInvoiceLines.find(l=>l.itemId===itemId);
+    if(existing){ existing.qty += qty; }
+    else{
+      currentInvoiceLines.push({ itemId: item.id, name: item.name||'Unnamed item', designNo: item.designNo||'', qty, price: Number(item.price)||0 });
+    }
+    qtyInput.value = 1;
+    renderInvoiceLines();
+  }
+
+  function renderInvoiceLines(){
+    const body = document.getElementById('invLinesBody');
+    body.innerHTML = '';
+    currentInvoiceLines.forEach((line, idx) => {
+      const tr = document.createElement('tr');
+      tr.className = 'row';
+      tr.innerHTML = `
+        <td>${escapeHtml(line.name)}</td>
+        <td><input type="number" class="num line-qty" data-idx="${idx}" min="1" value="${line.qty}"></td>
+        <td><input type="number" class="num line-price" data-idx="${idx}" min="0" step="0.01" value="${line.price}"></td>
+        <td>${money(line.qty * line.price)}</td>
+        <td><button type="button" class="del-btn" data-idx="${idx}" title="Remove line">×</button></td>
+      `;
+      body.appendChild(tr);
+    });
+    document.getElementById('invEmptyLines').hidden = currentInvoiceLines.length !== 0;
+    updateInvoiceTotals();
+  }
+
+  function updateInvoiceTotals(){
+    const subtotal = currentInvoiceLines.reduce((s,l)=>s+l.qty*l.price,0);
+    const discount = Math.max(0, Number(document.getElementById('invDiscount').value)||0);
+    const total = Math.max(0, subtotal - discount);
+    const paidNow = Math.max(0, Number(document.getElementById('invPaidNow').value)||0);
+    const balanceDue = Math.max(0, total - paidNow);
+    document.getElementById('invSubtotal').textContent = money(subtotal);
+    document.getElementById('invTotal').textContent = money(total);
+    document.getElementById('invBalanceDue').textContent = money(balanceDue);
+  }
+
+  document.getElementById('invLinesBody').addEventListener('input', e => {
+    const idx = Number(e.target.dataset.idx);
+    if(Number.isNaN(idx)) return;
+    if(e.target.classList.contains('line-qty')) currentInvoiceLines[idx].qty = Math.max(1, Number(e.target.value)||1);
+    if(e.target.classList.contains('line-price')) currentInvoiceLines[idx].price = Math.max(0, Number(e.target.value)||0);
+    renderInvoiceLines();
+  });
+  document.getElementById('invLinesBody').addEventListener('click', e => {
+    const btn = e.target.closest('.del-btn');
+    if(!btn) return;
+    currentInvoiceLines.splice(Number(btn.dataset.idx),1);
+    renderInvoiceLines();
+  });
+  document.getElementById('invDiscount').addEventListener('input', updateInvoiceTotals);
+  document.getElementById('invPaidNow').addEventListener('input', updateInvoiceTotals);
+  document.getElementById('addLineBtn').addEventListener('click', addInvoiceLine);
+  document.getElementById('invCustomerSelect').addEventListener('change', e=>{
+    if(e.target.value === '') document.getElementById('newCustomerPanel').hidden = true;
+  });
+
+  function nextInvoiceNumber(){
+    return 'INV-' + String(invoices.length + 1).padStart(4,'0');
+  }
+
+  function saveInvoice(){
+    const customerSel = document.getElementById('invCustomerSelect');
+    const customerId = customerSel.value;
+    if(!customerId){ alert('Select or add a customer first.'); return; }
+    if(currentInvoiceLines.length === 0){ alert('Add at least one item.'); return; }
+    const customer = customers.find(c=>c.id===customerId);
+    if(!customer) return;
+
+    const subtotal = currentInvoiceLines.reduce((s,l)=>s+l.qty*l.price,0);
+    const discount = Math.max(0, Number(document.getElementById('invDiscount').value)||0);
+    const total = Math.max(0, subtotal - discount);
+    const paidNow = Math.max(0, Number(document.getElementById('invPaidNow').value)||0);
+
+    const invoice = {
+      id: uid(),
+      number: nextInvoiceNumber(),
+      date: new Date().toISOString(),
+      customerId: customer.id,
+      customerName: customer.name,
+      lines: currentInvoiceLines.map(l=>({...l})),
+      subtotal, discount, total
+    };
+    invoices.push(invoice);
+    scheduleSave(INVOICES_KEY, () => invoices);
+
+    currentInvoiceLines.forEach(line=>{
+      const item = items.find(i=>i.id===line.itemId);
+      if(item) item.outQty = (Number(item.outQty)||0) + line.qty;
+    });
+    scheduleSave(ITEMS_KEY, () => items);
+    render();
+
+    if(paidNow > 0){
+      customer.payments = customer.payments || [];
+      customer.payments.push({ id: uid(), amount: paidNow, date: invoice.date, note: 'Invoice payment', invoiceId: invoice.id });
+      scheduleSave(CUSTOMERS_KEY, () => customers);
+    }
+
+    renderInvoicesTab();
+    renderCustomersTab();
+    renderInvoiceItemOptions();
+
+    currentInvoiceLines = [];
+    renderInvoiceLines();
+    document.getElementById('invDiscount').value = 0;
+    document.getElementById('invPaidNow').value = 0;
+    customerSel.value = '';
+
+    openPrintView(invoice);
+  }
+  document.getElementById('saveInvoiceBtn').addEventListener('click', saveInvoice);
+
+  /* ================= INVOICES TAB ================= */
+
+  function renderInvoicesTab(){
+    const body = document.getElementById('invoicesBody');
+    body.innerHTML = '';
+    [...invoices].reverse().forEach(inv=>{
+      const customer = customers.find(c=>c.id===inv.customerId);
+      const paid = customer ? (customer.payments||[]).filter(p=>p.invoiceId===inv.id).reduce((s,p)=>s+p.amount,0) : 0;
+      const balance = inv.total - paid;
+      const tr = document.createElement('tr');
+      tr.className = 'row';
+      tr.innerHTML = `
+        <td><strong>${inv.number}</strong></td>
+        <td>${new Date(inv.date).toLocaleDateString()}</td>
+        <td>${escapeHtml(inv.customerName)}</td>
+        <td>${money(inv.total)}</td>
+        <td>${money(paid)}</td>
+        <td>${money(balance)}</td>
+        <td>
+          <button type="button" class="btn-light-ghost btn-sm" data-action="view" data-id="${inv.id}">Print</button>
+          <button type="button" class="del-btn" data-action="delinv" data-id="${inv.id}" title="Delete invoice">×</button>
+        </td>
+      `;
+      body.appendChild(tr);
+    });
+    document.getElementById('invoicesEmpty').hidden = invoices.length !== 0;
+  }
+
+  function deleteInvoice(invoiceId){
+    const inv = invoices.find(i=>i.id===invoiceId);
+    if(!inv) return;
+    if(!confirm(`Delete invoice ${inv.number}?`)) return;
+    if(confirm('Add these items back to stock too?')){
+      inv.lines.forEach(line=>{
+        const item = items.find(i=>i.id===line.itemId);
+        if(item) item.outQty = Math.max(0, (Number(item.outQty)||0) - line.qty);
+      });
+      scheduleSave(ITEMS_KEY, () => items);
+      render();
+    }
+    invoices = invoices.filter(i=>i.id!==invoiceId);
+    scheduleSave(INVOICES_KEY, () => invoices);
+    customers.forEach(c=>{ c.payments = (c.payments||[]).filter(p=>p.invoiceId!==invoiceId); });
+    scheduleSave(CUSTOMERS_KEY, () => customers);
+    renderInvoicesTab();
+    renderCustomersTab();
+  }
+
+  document.getElementById('invoicesBody').addEventListener('click', e=>{
+    const viewBtn = e.target.closest('[data-action="view"]');
+    if(viewBtn){ const inv = invoices.find(i=>i.id===viewBtn.dataset.id); if(inv) openPrintView(inv); return; }
+    const delBtn = e.target.closest('[data-action="delinv"]');
+    if(delBtn){ deleteInvoice(delBtn.dataset.id); }
+  });
+
+  /* ================= PRINT VIEW ================= */
+
+  function openPrintView(invoice){
+    const area = document.getElementById('printArea');
+    const linesHtml = invoice.lines.map(l => `
+      <tr>
+        <td>${escapeHtml(l.name)}${l.designNo ? ` <span class="pr-design">(${escapeHtml(l.designNo)})</span>` : ''}</td>
+        <td style="text-align:center;">${l.qty}</td>
+        <td style="text-align:right;">${money(l.price)}</td>
+        <td style="text-align:right;">${money(l.qty*l.price)}</td>
+      </tr>
+    `).join('');
+    area.innerHTML = `
+      <div class="pr-header">
+        <h2>${escapeHtml(settings.shopName || 'Invoice')}</h2>
+        <p class="pr-sub">${settings.shopName ? 'Invoice' : ''}</p>
+      </div>
+      <div class="pr-meta">
+        <div><strong>Invoice:</strong> ${invoice.number}</div>
+        <div><strong>Date:</strong> ${new Date(invoice.date).toLocaleDateString()}</div>
+        <div><strong>Customer:</strong> ${escapeHtml(invoice.customerName)}</div>
+      </div>
+      <table class="pr-table">
+        <thead><tr><th>Item</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+        <tbody>${linesHtml}</tbody>
+      </table>
+      <div class="pr-totals">
+        <div><span>Subtotal</span><span>${money(invoice.subtotal)}</span></div>
+        ${invoice.discount ? `<div><span>Discount</span><span>-${money(invoice.discount)}</span></div>` : ''}
+        <div class="pr-grand"><span>Total</span><span>${money(invoice.total)}</span></div>
+      </div>
+      <p class="pr-thanks">Thank you!</p>
+    `;
+    document.getElementById('printModal').hidden = false;
+  }
+
+  document.getElementById('printBtn').addEventListener('click', () => window.print());
+  document.getElementById('closePrintBtn').addEventListener('click', () => { document.getElementById('printModal').hidden = true; });
+
+  /* ================= TABS ================= */
+
+  document.querySelectorAll('.tab-btn').forEach(btn=>{
+    btn.addEventListener('click', ()=>{
+      document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      document.querySelectorAll('.tab-panel').forEach(p=>p.hidden = true);
+      document.getElementById('panel-'+btn.dataset.tab).hidden = false;
+      if(btn.dataset.tab === 'invoice'){ renderInvoiceItemOptions(); renderCustomerOptions(); }
+      if(btn.dataset.tab === 'invoices'){ renderInvoicesTab(); }
+      if(btn.dataset.tab === 'customers'){ renderCustomersTab(); }
+    });
+  });
+
+  init();
+</script>
+</body>
+</html>
