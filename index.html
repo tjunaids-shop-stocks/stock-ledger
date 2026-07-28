@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Oswald:wght@400;500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
 <style>
   :root{
     --ink:#1E2430;
@@ -478,6 +479,8 @@
      than a plain class, so this correctly wins whenever the hidden attribute
      is set — on page load, and whenever JS sets modal.hidden = true. */
   .print-modal[hidden]{ display:none; }
+
+  .masthead-actions{ display:flex; gap:8px; flex-wrap:wrap; }
   .print-sheet{ background:#fff; border-radius:10px; padding:28px; max-width:520px; width:100%; }
   .pr-header h2{ font-family:'Oswald', sans-serif; text-transform:uppercase; margin:0 0 2px; font-size:22px; }
   .pr-sub{ margin:0 0 16px; color:var(--muted); font-size:12px; text-transform:uppercase; letter-spacing:.05em; }
@@ -508,7 +511,8 @@
 </style>
 </head>
 <body>
-<div class="app">
+
+<div class="app" id="mainApp">
 
   <header class="masthead">
     <div class="masthead-top">
@@ -518,7 +522,15 @@
           <h1>Stock Ledger</h1>
         </div>
       </div>
-      <button id="resetBtn" class="ghost-btn">Clear all data</button>
+      <div class="masthead-actions">
+        <button id="backupBtn" class="ghost-btn">Backup data</button>
+        <button id="restoreBtn" class="ghost-btn">Restore backup</button>
+        <input type="file" id="restoreInput" accept=".json" hidden>
+        <button id="exportExcelBtn" class="ghost-btn">Export to Excel</button>
+        <button id="importExcelBtn" class="ghost-btn">Import stock (Excel)</button>
+        <input type="file" id="importExcelInput" accept=".xlsx,.xls" hidden>
+        <button id="resetBtn" class="ghost-btn">Clear all data</button>
+      </div>
     </div>
 
     <div class="masthead-stats">
@@ -689,6 +701,7 @@
   let filterText = '';
   let lowStockThreshold = 5;
   let storageAvailable = true;
+  let pendingFocusId = null;
   const saveTimers = {};
 
   const tbody = document.getElementById('tbody');
@@ -696,36 +709,27 @@
   const loadingState = document.getElementById('loadingState');
   const errorBanner = document.getElementById('errorBanner');
 
-  // Use Claude's storage API when this page is running inside Claude.ai's
-  // artifact preview; fall back to the browser's own localStorage when it's
-  // opened as a plain hosted or downloaded file.
-  const hasCloudStorage = typeof window.storage !== 'undefined' && window.storage !== null;
-
-  async function storageGet(key){
-    if(hasCloudStorage) return window.storage.get(key, false);
-    const raw = localStorage.getItem(key);
-    return raw !== null ? { key, value: raw, shared: false } : null;
+  function storageGet(key){
+    try{ return localStorage.getItem(key); }catch(e){ return null; }
   }
-  async function storageSet(key, value){
-    if(hasCloudStorage) return window.storage.set(key, value, false);
-    localStorage.setItem(key, value);
-    return { key, value, shared: false };
+  function storageSet(key, value){
+    try{ localStorage.setItem(key, value); return true; }catch(e){ return false; }
   }
 
   function scheduleSave(key, getData){
     clearTimeout(saveTimers[key]);
-    saveTimers[key] = setTimeout(async () => {
-      try{
-        const result = await storageSet(key, JSON.stringify(getData()));
-        if(!result){ storageAvailable = false; errorBanner.hidden = false; }
-        else { storageAvailable = true; errorBanner.hidden = true; }
-      }catch(e){
-        storageAvailable = false;
-        errorBanner.hidden = false;
-      }
-    }, 500);
+    saveTimers[key] = setTimeout(() => {
+      const ok = storageSet(key, JSON.stringify(getData()));
+      storageAvailable = ok;
+      errorBanner.hidden = ok;
+    }, 400);
   }
-  function debounceSave(){ scheduleSave(ITEMS_KEY, () => items); }
+  function saveNow(key, data){
+    const ok = storageSet(key, JSON.stringify(data));
+    storageAvailable = ok;
+    errorBanner.hidden = ok;
+    return ok;
+  }
 
   function uid(){ return 'x' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
 
@@ -740,22 +744,22 @@
     return /^[a-zA-Z]/.test(cur) ? `${cur} ${amt}` : `${cur}${amt}`;
   }
 
-  async function init(){
+  /* ================= STARTUP ================= */
+
+  function init(){
     try{
-      const [itemsRes, custRes, invRes, setRes] = await Promise.all([
-        storageGet(ITEMS_KEY), storageGet(CUSTOMERS_KEY), storageGet(INVOICES_KEY), storageGet(SETTINGS_KEY)
-      ]);
-      items = itemsRes && itemsRes.value ? JSON.parse(itemsRes.value) : [];
-      customers = custRes && custRes.value ? JSON.parse(custRes.value) : [];
-      invoices = invRes && invRes.value ? JSON.parse(invRes.value) : [];
-      settings = setRes && setRes.value ? JSON.parse(setRes.value) : { shopName:'', currency:'AED', nextInvoiceSeq: 1 };
+      items = JSON.parse(storageGet(ITEMS_KEY) || '[]');
+      customers = JSON.parse(storageGet(CUSTOMERS_KEY) || '[]');
+      invoices = JSON.parse(storageGet(INVOICES_KEY) || '[]');
+      const savedSettings = storageGet(SETTINGS_KEY);
+      settings = savedSettings ? Object.assign({ shopName:'', currency:'AED', nextInvoiceSeq: 1 }, JSON.parse(savedSettings)) : { shopName:'', currency:'AED', nextInvoiceSeq: 1 };
     }catch(e){
-      items = []; customers = []; invoices = []; settings = { shopName:'', currency:'AED', nextInvoiceSeq: 1 };
+      items = []; customers = []; invoices = [];
+      settings = { shopName:'', currency:'AED', nextInvoiceSeq: 1 };
       storageAvailable = false; errorBanner.hidden = false;
     }
+
     if(!settings.nextInvoiceSeq){
-      // Existing shops saved settings before this field existed — derive a
-      // safe starting point from the highest invoice number already on file.
       let maxSeq = 0;
       invoices.forEach(inv=>{
         const m = /^INV-(\d+)$/.exec(inv.number || '');
@@ -764,37 +768,39 @@
       settings.nextInvoiceSeq = maxSeq + 1;
     }
     if(!settings.currency || settings.currency === '$'){
-      // Switch existing shops off the old default ($) to AED automatically;
-      // if a shop deliberately picked a different symbol, this leaves it alone.
       settings.currency = 'AED';
-      scheduleSave(SETTINGS_KEY, () => settings);
     }
+    saveNow(SETTINGS_KEY, settings);
+
     document.getElementById('shopNameInput').value = settings.shopName || '';
     document.getElementById('currencyInput').value = settings.currency || '';
+
     loadingState.hidden = true;
     render();
     renderInvoiceItemOptions();
     renderCustomerOptions();
-    renderInvoicesTab();
     renderCustomersTab();
+    renderInvoicesTab();
+    renderInvoiceLines();
   }
 
   /* ================= STOCK TAB ================= */
 
   function addItem(){
-    items.unshift({ id: uid(), name:'', designNo:'', inQty:0, outQty:0, price:0, photo:null });
-    debounceSave();
+    const item = { id: uid(), name:'', designNo:'', inQty:0, outQty:0, price:0, photo:null };
+    items.unshift(item);
+    pendingFocusId = item.id;
     render();
-    const firstInput = tbody.querySelector('tr:first-child .in-name');
-    if(firstInput) firstInput.focus();
+    renderInvoiceItemOptions();
+    scheduleSave(ITEMS_KEY, () => items);
   }
 
   function deleteItem(id){
     if(!confirm('Remove this item from your stock ledger?')) return;
     items = items.filter(i => i.id !== id);
-    debounceSave();
     render();
     renderInvoiceItemOptions();
+    scheduleSave(ITEMS_KEY, () => items);
   }
 
   function isLow(item){
@@ -834,7 +840,7 @@
         canvas.getContext('2d').drawImage(img, 0, 0, w, h);
         item.photo = canvas.toDataURL('image/jpeg', 0.72);
         updateRowPhoto(tr, item);
-        debounceSave();
+        scheduleSave(ITEMS_KEY, () => items);
       };
       img.src = ev.target.result;
     };
@@ -877,10 +883,35 @@
   function render(){
     const q = filterText.trim().toLowerCase();
     const filtered = items.filter(i => !q || i.name.toLowerCase().includes(q) || i.designNo.toLowerCase().includes(q));
+
+    const active = document.activeElement;
+    let refocus = null;
+    if(active && tbody.contains(active)){
+      const tr = active.closest('tr');
+      const cls = active.classList && [...active.classList].find(c => c.indexOf('in-') === 0);
+      if(tr && cls) refocus = { id: tr.dataset.id, cls, selStart: active.selectionStart, selEnd: active.selectionEnd };
+    }
+
     tbody.innerHTML = '';
     filtered.forEach(item => tbody.appendChild(buildRow(item)));
     emptyState.hidden = items.length !== 0;
     updateStats();
+
+    if(pendingFocusId){
+      const tr = tbody.querySelector(`tr[data-id="${pendingFocusId}"]`);
+      const input = tr && tr.querySelector('.in-name');
+      if(input) input.focus();
+      pendingFocusId = null;
+    } else if(refocus && refocus.id){
+      const newTr = tbody.querySelector(`tr[data-id="${refocus.id}"]`);
+      const newInput = newTr && newTr.querySelector('.' + refocus.cls);
+      if(newInput){
+        newInput.focus();
+        if(typeof refocus.selStart === 'number' && newInput.setSelectionRange){
+          try{ newInput.setSelectionRange(refocus.selStart, refocus.selEnd); }catch(e){}
+        }
+      }
+    }
   }
 
   function updateRowRemain(tr, item){
@@ -916,7 +947,7 @@
     else return;
     updateRowRemain(tr, item);
     updateStats();
-    debounceSave();
+    scheduleSave(ITEMS_KEY, () => items);
     renderInvoiceItemOptions();
   });
 
@@ -932,7 +963,7 @@
       input.value = item[field];
       updateRowRemain(tr, item);
       updateStats();
-      debounceSave();
+      scheduleSave(ITEMS_KEY, () => items);
       renderInvoiceItemOptions();
       return;
     }
@@ -949,7 +980,7 @@
       const item = items.find(i => i.id === tr.dataset.id);
       item.photo = null;
       updateRowPhoto(tr, item);
-      debounceSave();
+      scheduleSave(ITEMS_KEY, () => items);
     }
   });
 
@@ -965,15 +996,14 @@
   document.getElementById('addItemBtn').addEventListener('click', addItem);
   document.getElementById('searchInput').addEventListener('input', e => { filterText = e.target.value; render(); });
   document.getElementById('thresholdInput').addEventListener('input', e => { lowStockThreshold = Math.max(0, Number(e.target.value) || 0); render(); });
-  document.getElementById('resetBtn').addEventListener('click', async () => {
+
+  document.getElementById('resetBtn').addEventListener('click', () => {
     if(!confirm('This clears every item, customer, and invoice. This cannot be undone. Continue?')) return;
     items = []; customers = []; invoices = [];
-    render(); renderInvoiceItemOptions(); renderCustomerOptions(); renderInvoicesTab(); renderCustomersTab();
-    try{
-      await storageSet(ITEMS_KEY, JSON.stringify(items));
-      await storageSet(CUSTOMERS_KEY, JSON.stringify(customers));
-      await storageSet(INVOICES_KEY, JSON.stringify(invoices));
-    }catch(e){}
+    saveNow(ITEMS_KEY, items);
+    saveNow(CUSTOMERS_KEY, customers);
+    saveNow(INVOICES_KEY, invoices);
+    render(); renderInvoiceItemOptions(); renderCustomerOptions(); renderCustomersTab(); renderInvoicesTab(); renderInvoiceLines();
   });
 
   /* ================= SETTINGS ================= */
@@ -1025,8 +1055,8 @@
     if(!confirm('Remove this customer?')) return;
     customers = customers.filter(c=>c.id!==customerId);
     scheduleSave(CUSTOMERS_KEY, () => customers);
-    renderCustomerOptions();
     renderCustomersTab();
+    renderCustomerOptions();
   }
 
   function renderCustomersTab(){
@@ -1201,7 +1231,6 @@
       if(item) item.outQty = (Number(item.outQty)||0) + line.qty;
     });
     scheduleSave(ITEMS_KEY, () => items);
-    render();
 
     if(paidNow > 0){
       customer.payments = customer.payments || [];
@@ -1209,16 +1238,17 @@
       scheduleSave(CUSTOMERS_KEY, () => customers);
     }
 
-    renderInvoicesTab();
-    renderCustomersTab();
-    renderInvoiceItemOptions();
-
     currentInvoiceLines = [];
     renderInvoiceLines();
     document.getElementById('invDiscount').value = 0;
     document.getElementById('invPaidNow').value = 0;
     nameInput.value = '';
     phoneInput.value = '';
+
+    render();
+    renderInvoiceItemOptions();
+    renderInvoicesTab();
+    renderCustomersTab();
 
     openPrintView(invoice);
   }
@@ -1263,11 +1293,15 @@
       });
       scheduleSave(ITEMS_KEY, () => items);
       render();
+      renderInvoiceItemOptions();
     }
     invoices = invoices.filter(i=>i.id!==invoiceId);
     scheduleSave(INVOICES_KEY, () => invoices);
-    customers.forEach(c=>{ c.payments = (c.payments||[]).filter(p=>p.invoiceId!==invoiceId); });
-    scheduleSave(CUSTOMERS_KEY, () => customers);
+    customers.forEach(c=>{
+      const before = (c.payments||[]).length;
+      c.payments = (c.payments||[]).filter(p=>p.invoiceId!==invoiceId);
+      if(c.payments.length !== before) scheduleSave(CUSTOMERS_KEY, () => customers);
+    });
     renderInvoicesTab();
     renderCustomersTab();
   }
@@ -1317,6 +1351,169 @@
 
   document.getElementById('printBtn').addEventListener('click', () => window.print());
   document.getElementById('closePrintBtn').addEventListener('click', () => { document.getElementById('printModal').hidden = true; });
+
+  /* ================= BACKUP / RESTORE (full data, JSON) ================= */
+
+  function backupData(){
+    const payload = {
+      app: 'stock-ledger',
+      backupVersion: 1,
+      exportedAt: new Date().toISOString(),
+      items, customers, invoices, settings
+    };
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    const stamp = new Date().toISOString().slice(0,10);
+    const safeName = (settings.shopName || 'stock-ledger').replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'') || 'stock-ledger';
+    a.href = url;
+    a.download = `${safeName}-backup-${stamp}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+  document.getElementById('backupBtn').addEventListener('click', backupData);
+
+  document.getElementById('restoreBtn').addEventListener('click', ()=>{
+    document.getElementById('restoreInput').click();
+  });
+  document.getElementById('restoreInput').addEventListener('change', async (e)=>{
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const data = JSON.parse(text);
+      if(!Array.isArray(data.items) || !Array.isArray(data.customers) || !Array.isArray(data.invoices)){
+        alert("That doesn't look like a Stock Ledger backup file.");
+        return;
+      }
+      if(!confirm(`This will REPLACE everything currently in the app with the contents of this backup (from ${data.exportedAt ? new Date(data.exportedAt).toLocaleString() : 'an unknown date'}). This cannot be undone. Continue?`)) return;
+
+      items = data.items;
+      customers = data.customers;
+      invoices = data.invoices;
+      settings = Object.assign({ shopName:'', currency:'AED', nextInvoiceSeq: 1 }, data.settings || {});
+
+      saveNow(ITEMS_KEY, items);
+      saveNow(CUSTOMERS_KEY, customers);
+      saveNow(INVOICES_KEY, invoices);
+      saveNow(SETTINGS_KEY, settings);
+
+      document.getElementById('shopNameInput').value = settings.shopName || '';
+      document.getElementById('currencyInput').value = settings.currency || '';
+      render();
+      renderInvoiceItemOptions();
+      renderCustomerOptions();
+      renderCustomersTab();
+      renderInvoicesTab();
+      renderInvoiceLines();
+      alert('Backup restored.');
+    }catch(err){
+      alert("Could not read that file — make sure it's an unedited backup file downloaded from this app's 'Backup data' button.");
+    }
+  });
+
+  /* ================= EXCEL EXPORT / IMPORT ================= */
+
+  function exportToExcel(){
+    const itemsSheet = items.map(i=>{
+      const remain = (Number(i.inQty)||0) - (Number(i.outQty)||0);
+      return {
+        'Item': i.name || '',
+        'Design No.': i.designNo || '',
+        'In Qty': Number(i.inQty)||0,
+        'Out Qty': Number(i.outQty)||0,
+        'Remain Qty': remain,
+        'Unit Price': Number(i.price)||0,
+        'Total Value': remain * (Number(i.price)||0),
+        'Low Stock': isLow(i) ? 'Yes' : 'No'
+      };
+    });
+    const customersSheet = customers.map(c=>{
+      const {billed,paid,balance} = customerBalance(c);
+      return { 'Customer': c.name, 'Phone': c.phone||'', 'Billed': billed, 'Paid': paid, 'Balance': balance };
+    });
+    const invoicesSheet = invoices.map(inv=>{
+      const customer = customers.find(c=>c.id===inv.customerId);
+      const paid = customer ? (customer.payments||[]).filter(p=>p.invoiceId===inv.id).reduce((s,p)=>s+p.amount,0) : 0;
+      return {
+        'Invoice #': inv.number,
+        'Date': new Date(inv.date).toLocaleDateString(),
+        'Customer': inv.customerName,
+        'Subtotal': inv.subtotal,
+        'Discount': inv.discount,
+        'Total': inv.total,
+        'Paid': paid,
+        'Balance': inv.total - paid
+      };
+    });
+    const lineItemsSheet = [];
+    invoices.forEach(inv=>{
+      inv.lines.forEach(l=>{
+        lineItemsSheet.push({
+          'Invoice #': inv.number,
+          'Date': new Date(inv.date).toLocaleDateString(),
+          'Item': l.name,
+          'Design No.': l.designNo||'',
+          'Qty': l.qty,
+          'Price': l.price,
+          'Line Total': l.qty * l.price
+        });
+      });
+    });
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(itemsSheet), 'Stock');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(customersSheet), 'Customers');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(invoicesSheet), 'Invoices');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.json_to_sheet(lineItemsSheet), 'Invoice Lines');
+    const stamp = new Date().toISOString().slice(0,10);
+    const safeName = (settings.shopName || 'stock-ledger').replace(/[^a-z0-9]+/gi,'-').replace(/^-+|-+$/g,'') || 'stock-ledger';
+    XLSX.writeFile(wb, `${safeName}-${stamp}.xlsx`);
+  }
+  document.getElementById('exportExcelBtn').addEventListener('click', exportToExcel);
+
+  document.getElementById('importExcelBtn').addEventListener('click', ()=>{
+    document.getElementById('importExcelInput').click();
+  });
+  document.getElementById('importExcelInput').addEventListener('change', async (e)=>{
+    const file = e.target.files && e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    try{
+      const buf = await file.arrayBuffer();
+      const wb = XLSX.read(buf, { type: 'array' });
+      const sheetName = wb.SheetNames.find(n => /stock|item/i.test(n)) || wb.SheetNames[0];
+      const rows = XLSX.utils.sheet_to_json(wb.Sheets[sheetName], { defval: '' });
+      if(rows.length === 0){ alert('No rows found in that sheet.'); return; }
+      let added = 0, updated = 0;
+      rows.forEach(row=>{
+        const name = String(row['Item'] ?? row['Name'] ?? row['Item Name'] ?? '').trim();
+        if(!name) return;
+        const designNo = String(row['Design No.'] ?? row['Design No'] ?? row['DesignNo'] ?? '').trim();
+        const inQty = Number(row['In Qty'] ?? row['InQty'] ?? 0) || 0;
+        const outQty = Number(row['Out Qty'] ?? row['OutQty'] ?? 0) || 0;
+        const price = Number(row['Unit Price'] ?? row['Price'] ?? 0) || 0;
+
+        const existing = items.find(i => (i.name||'').trim().toLowerCase()===name.toLowerCase() && (i.designNo||'').trim().toLowerCase()===designNo.toLowerCase());
+        if(existing){
+          existing.inQty = inQty; existing.outQty = outQty; existing.price = price;
+          updated++;
+        } else {
+          items.push({ id: uid(), name, designNo, inQty, outQty, price, photo: null });
+          added++;
+        }
+      });
+      saveNow(ITEMS_KEY, items);
+      render();
+      renderInvoiceItemOptions();
+      alert(`Import complete — ${added} new item${added===1?'':'s'} added, ${updated} existing item${updated===1?'':'s'} updated.`);
+    }catch(err){
+      alert("Could not read that file. Make sure it's a valid Excel file with column headers like Item, Design No., In Qty, Out Qty, Unit Price.");
+    }
+  });
 
   /* ================= TABS ================= */
 
